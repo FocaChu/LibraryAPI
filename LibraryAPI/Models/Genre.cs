@@ -8,6 +8,6 @@ namespace LibraryAPI
 
         public string Name { get; set; }
 
-        [JsonIgnore]  public ICollection<Book> Books { get; set; }
+        [JsonIgnore]  public ICollection<Book> Books { get; set; } = new List<Book>();
     }
 }

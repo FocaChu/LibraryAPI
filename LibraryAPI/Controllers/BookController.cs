@@ -77,7 +77,6 @@ namespace LibraryAPI
                 return BadRequest(ModelState);
 
             var existingBook = await _context.Books
-                .Include(b => b.Genres)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (existingBook == null)
@@ -104,6 +103,35 @@ namespace LibraryAPI
             await _context.SaveChangesAsync();
             return Ok(existingBook);
         }
+
+        [HttpPut("up_genres/{id}")]
+        public async Task<ActionResult<Book>> UpdateBookGenres(int id, [FromBody] List<int> genreIds)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var book = await _context.Books
+                .Include(b => b.Genres)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (book == null)
+                return NotFound($"Book with ID {id} not found.");
+
+            book.Genres.Clear();
+
+            foreach (var genreId in genreIds.Distinct())
+            {
+                var genre = await _context.Genres.FindAsync(genreId);
+                if (genre == null)
+                    return NotFound($"Genre with ID {genreId} not found.");
+
+                book.Genres.Add(genre);
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(book);
+        }
+
 
 
         [HttpPost]
