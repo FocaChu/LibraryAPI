@@ -10,7 +10,7 @@ namespace LibraryAPI
 
         public int Birth { get; set; }
 
-        public string Nacionality { get; set; }
+        public string Nationality { get; set; }
 
         [JsonIgnore] public ICollection<Book> Books { get; set; }
     }

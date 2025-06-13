@@ -1,4 +1,5 @@
-﻿using LibraryAPI.Context;
+﻿using AutoMapper;
+using LibraryAPI.Context;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,17 +10,20 @@ namespace LibraryAPI
     [ApiController]
     public class BookController : ControllerBase
     {
-        public Db _contex;
+        private readonly Db _context;
 
-        public BookController(Db context)
+        private readonly IMapper _mapper;
+
+        public BookController(Db context, IMapper mapper)
         {
-            _contex = context;
+            _context = context;
+            _mapper = mapper;
         }
 
         [HttpGet]
         public async Task<ActionResult<List<Book>>> GetAllBooks()
         {
-            var books = await _contex.Books
+            var books = await _context.Books
                 .Include(n => n.Genres)
                 .Include(b => b.Author)
                 .ToListAsync();
@@ -36,7 +40,7 @@ namespace LibraryAPI
         [HttpGet("{id}")]
         public async Task<ActionResult<Book>> GetBookById(int id)
         {
-            var book = await _contex.Books
+            var book = await _context.Books
                 .Include(n => n.Genres)
                 .Include(b => b.Author)
                 .FirstOrDefaultAsync(b => b.Id == id);
@@ -49,18 +53,18 @@ namespace LibraryAPI
             return Ok(book);
         }
 
-        [HttpGet("author_nacionality/{string}")]
-        public async Task<ActionResult<List<Book>>> GetBooksByAuthorNationality(string nacionality)
+        [HttpGet("author_nationality/{nationality}")]
+        public async Task<ActionResult<List<Book>>> GetBooksByAuthorNationality(string nationality)
         {
-            var books = await _contex.Books
+            var books = await _context.Books
                 .Include(b => b.Author)
                 .Include(b => b.Genres)
-                .Where(b => b.Author.Nacionality == nacionality)
+                .Where(b => b.Author.Nationality == nationality)
                 .ToListAsync();
 
             if (books == null || !books.Any())
             {
-                return NotFound($"No books found for authors with nacionality {nacionality}");
+                return NotFound($"No books found for authors with nacionality {nationality}");
             }
 
             return Ok(books);
@@ -69,47 +73,38 @@ namespace LibraryAPI
         [HttpPut("{id}")]
         public async Task<ActionResult<Book>> UpdateBook(int id, [FromBody] BookDto book)
         {
-            if (book == null)
-            {
-                return BadRequest("Book data is invalid.");
-            }
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            var existingBook = await _contex.Books.FindAsync(id);
+            var existingBook = await _context.Books
+                .Include(b => b.Genres)
+                .FirstOrDefaultAsync(b => b.Id == id);
 
             if (existingBook == null)
-            {
                 return NotFound($"Book with ID {id} not found.");
-            }
 
-            existingBook.Title = book.Title;
+            _mapper.Map(book, existingBook);
 
-            existingBook.Author = await _contex.Authors.FindAsync(book.AuthorId);
-
-            if (existingBook.Author == null)
-            {
+            var author = await _context.Authors.FindAsync(book.AuthorId);
+            if (author == null)
                 return NotFound($"Author with ID {book.AuthorId} not found.");
-            }
 
-            foreach(var id_genero in book.GenreIds)
+            existingBook.Author = author;
+
+            existingBook.Genres.Clear();
+            foreach (var genreId in book.GenreIds.Distinct())
             {
-                var genre = await _contex.Genres.FindAsync(id_genero);
+                var genre = await _context.Genres.FindAsync(genreId);
+                if (genre == null)
+                    return NotFound($"Genre with ID {genreId} not found.");
 
-                if (genre != null)
-                {
-                    existingBook.Genres.Add(genre);
-                }
-                else
-                {
-                    return NotFound($"Genre with ID {id_genero} not found.");
-                }
+                existingBook.Genres.Add(genre);
             }
 
-            _contex.Books.Update(existingBook);
-
-            await _contex.SaveChangesAsync();
-
+            await _context.SaveChangesAsync();
             return Ok(existingBook);
         }
+
 
         [HttpPost]
         public async Task<ActionResult<Book>> CreateBook([FromBody] BookDto newBook)
@@ -117,52 +112,47 @@ namespace LibraryAPI
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var author = await _contex.Authors.FindAsync(newBook.AuthorId);
+            var author = await _context.Authors.FindAsync(newBook.AuthorId);
 
             if (author == null)
                 return NotFound($"Author with ID {newBook.AuthorId} not found.");
 
-            var book = new Book
-            {
-                Title = newBook.Title,
-                Author = author
-            };
+            var book = _mapper.Map<Book>(newBook);
+            book.Author = author;
 
-            if(newBook.GenreIds == null || !newBook.GenreIds.Any())
+            if (newBook.GenreIds == null || !newBook.GenreIds.Any())
                 return BadRequest("At least one genre ID must be provided.");
 
-            foreach (var genreId in newBook.GenreIds)
+            foreach (var genreId in newBook.GenreIds.Distinct())
             {
-                var genre = await _contex.Genres.FindAsync(genreId);
-
+                var genre = await _context.Genres.FindAsync(genreId);
                 if (genre == null)
                     return NotFound($"Genre with ID {genreId} not found.");
 
                 book.Genres.Add(genre);
             }
 
-            _contex.Books.Add(book);
-            await _contex.SaveChangesAsync();
+            _context.Books.Add(book);
+            await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetBookById), new { id = book.Id }, book);
         }
 
 
-
         [HttpDelete("{id}")]
         public async Task<ActionResult> DeleteBook(int id)
         {
-            var book = await _contex.Books.FindAsync(id);
+            var book = await _context.Books.FindAsync(id);
 
             if (book == null)
             {
                 return NotFound($"Book with ID {id} not found.");
             }
-            _contex.Books.Remove(book);
+            _context.Books.Remove(book);
 
-            await _contex.SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
-            return Ok(book);
+            return NoContent();
         }
     }
 }
