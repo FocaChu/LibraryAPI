@@ -8,6 +8,6 @@
 
         public Author Author { get; set; }
 
-        public ICollection<Genre> Genres { get; set; }
+        public ICollection<Genre> Genres { get; set; } = new List<Genre>();
     }
 }

@@ -6,6 +6,6 @@
 
         public int AuthorId { get; set; }
 
-        public List<int> Gender_Ids { get; set; }
+        public List<int> GenreIds { get; set; }
     }
 }
